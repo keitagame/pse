@@ -10,7 +10,7 @@
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    --bg: #0e0e14;
+    --bg: #000000;
     --surface: #16161f;
     --panel: #1c1c2a;
     --border: #2e2e42;
@@ -92,7 +92,7 @@
     letter-spacing: 0.05em;
   }
 
-  input[type="text"] {
+  input[type="text"], textarea {
     width: 100%;
     background: var(--surface);
     border: 1px solid var(--border);
@@ -103,8 +103,9 @@
     padding: 10px 14px;
     outline: none;
     transition: border-color 0.2s;
+    resize: vertical;
   }
-  input[type="text"]:focus { border-color: var(--accent); }
+  input[type="text"]:focus, textarea:focus { border-color: var(--accent); }
 
   .row { display: flex; gap: 12px; flex-wrap: wrap; }
 
@@ -360,8 +361,9 @@
     <div class="panel-title">テキスト設定</div>
 
     <div>
-      <label>テキスト（最大8文字推奨）</label>
-      <input type="text" id="textInput" value="草" maxlength="10" placeholder="好きな文字を入力">
+      <label>テキスト（Enterで改行・複数行OK）</label>
+      <textarea id="textInput" rows="3" placeholder="好きな文字を入力
+Enterで改行できます">草</textarea>
     </div>
 
     <div>
@@ -456,7 +458,6 @@
     <div class="panel-title">プレビュー</div>
 
     <div class="size-badges">
-        <span class="badge" data-size="256">256px</span>
       <span class="badge active" data-size="128">128px</span>
       <span class="badge" data-size="64">64px</span>
       <span class="badge" data-size="32">32px</span>
@@ -474,7 +475,6 @@
 
     <!-- Thumb previews -->
     <div class="preview-thumbs">
-        
       <div class="thumb-wrap">
         <canvas id="thumb128" width="48" height="48"></canvas>
         <div class="thumb-label">128px</div>
@@ -600,63 +600,83 @@ function drawEmoji(canvas, size) {
     ctx.fill();
   }
 
-  // --- Step 1: measure text at a large reference font size ---
-  const padding = size * 0.08;
+  // --- Multiline auto-fit rendering ---
+  const padding = size * 0.07;
   const maxW = size - padding * 2;
   const maxH = size - padding * 2;
 
-  // Use a tall reference size so measurements are accurate
+  // Split lines (filter empty trailing lines)
+  const lines = text.split('\n');
+  const numLines = lines.length;
+
+  // Reference font size for measurement
   const refSize = size * 2;
-  ctx.font = `${weight} ${refSize}px ${font}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
 
-  const m = ctx.measureText(text);
-  const refW  = m.width;
-  const refAscent  = m.actualBoundingBoxAscent  || refSize * 0.78;
-  const refDescent = m.actualBoundingBoxDescent || refSize * 0.22;
-  const refH  = refAscent + refDescent;
+  // Measure each line at refSize to get natural dimensions
+  ctx.font = `${weight} ${refSize}px ${font}`;
+  const lineMetrics = lines.map(line => {
+    const m = ctx.measureText(line || ' ');
+    return {
+      width: line ? m.width : 0,
+      ascent: m.actualBoundingBoxAscent  || refSize * 0.78,
+      descent: m.actualBoundingBoxDescent || refSize * 0.22,
+    };
+  });
 
-  // --- Step 2: compute scale to fill box (stretch X and Y independently) ---
-  const scaleX = maxW / refW;
-  const scaleY = maxH / refH;
+  const maxLineW = Math.max(...lineMetrics.map(l => l.width), 1);
+  // Per-line height at refSize
+  const lineH_ref = lineMetrics[0].ascent + lineMetrics[0].descent;
+  const lineGap_ref = lineH_ref * 0.12; // small gap between lines
+  const totalH_ref = lineH_ref * numLines + lineGap_ref * (numLines - 1);
 
-  // Clamp scaleX so it never squishes more than 50% of natural ratio
-  // (keeps text readable even for 1-char input)
-  const clampedScaleX = Math.max(scaleX, scaleY * 0.2);
-  const clampedScaleY = Math.max(scaleY, scaleX * 0.2);
+  // Scale so ALL lines together fill the box
+  const scaleByW = maxW / maxLineW;
+  const scaleByH = maxH / totalH_ref;
 
-  // Final font size driven by Y scale (height fills the box)
-  const fontSize = refSize * clampedScaleY;
+  // Each line stretches horizontally to fill width independently
+  // but vertical scale is shared (uniform row height)
+  const scaleY = scaleByH;
+  const fontSize = refSize * scaleY;
+  const lineH = lineH_ref * scaleY;
+  const lineGap = lineGap_ref * scaleY;
+  const totalH = lineH * numLines + lineGap * (numLines - 1);
 
-  // --- Step 3: draw with transform ---
-  // We draw at refSize with scaleX correction so the glyph fills maxW & maxH
-  const drawScaleX = clampedScaleX / clampedScaleY; // horizontal stretch relative to font size
-
-  ctx.save();
-  ctx.translate(size / 2, size / 2 + offsetY * (size / 128));
-  ctx.scale(drawScaleX, 1);
+  // Top of first line (vertically centered in canvas)
+  const startY = size / 2 - totalH / 2 + offsetY * (size / 128);
 
   ctx.font = `${weight} ${fontSize}px ${font}`;
 
-  // Vertical centering: center of ascent+descent block
-  const drawAscent  = (m.actualBoundingBoxAscent  || refSize * 0.78) * (fontSize / refSize);
-  const drawDescent = (m.actualBoundingBoxDescent || refSize * 0.22) * (fontSize / refSize);
-  const baselineY = (drawAscent - drawDescent) / 2;
+  lines.forEach((line, i) => {
+    if (!line) return;
+    const lm = lineMetrics[i];
+    // Horizontal stretch: fit this line to maxW
+    const naturalW = lm.width * scaleY; // width at current fontSize
+    const stretchX = Math.min(maxW / naturalW, 2.5); // cap stretch at 2.5x to avoid illegibility
 
-  // Stroke
-  if (hasStroke) {
-    ctx.lineWidth = (sWidth * (size / 128) * 2) / drawScaleX; // compensate for X scale
-    ctx.lineJoin = 'round';
-    ctx.strokeStyle = sColor;
-    ctx.strokeText(text, 0, baselineY);
-  }
+    const rowAscent = lm.ascent * scaleY;
+    const rowDescent = lm.descent * scaleY;
+    const rowH = rowAscent + rowDescent;
 
-  // Fill
-  ctx.fillStyle = tColor;
-  ctx.fillText(text, 0, baselineY);
+    // baseline Y for this row
+    const rowTop = startY + i * (lineH + lineGap);
+    const baselineY = rowTop + rowAscent;
 
-  ctx.restore();
+    ctx.save();
+    ctx.translate(size / 2, 0);
+    ctx.scale(stretchX, 1);
+
+    if (hasStroke) {
+      ctx.lineWidth = (sWidth * (size / 128) * 2) / stretchX;
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = sColor;
+      ctx.strokeText(line, 0, baselineY);
+    }
+    ctx.fillStyle = tColor;
+    ctx.fillText(line, 0, baselineY);
+    ctx.restore();
+  });
 }
 
 function render() {
