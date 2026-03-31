@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Slack絵文字メーカー</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Zen+Dots&family=M+PLUS+Rounded+1c:wght@400;700;900&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0e0e14;
+    --surface: #16161f;
+    --panel: #1c1c2a;
+    --border: #2e2e42;
+    --accent: #7c6aff;
+    --accent2: #ff6ab0;
+    --accent3: #6affcd;
+    --text: #e8e8ff;
+    --muted: #6868aa;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px;
+    background-image:
+      radial-gradient(ellipse 60% 40% at 20% 10%, rgba(124,106,255,0.12) 0%, transparent 70%),
+      radial-gradient(ellipse 50% 40% at 80% 80%, rgba(255,106,176,0.10) 0%, transparent 70%);
+  }
+
+  h1 {
+    font-family: 'Zen Dots', cursive;
+    font-size: clamp(1.4rem, 4vw, 2rem);
+    letter-spacing: 0.05em;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 6px;
+  }
+
+  .sub {
+    color: var(--muted);
+    font-size: 0.85rem;
+    margin-bottom: 36px;
+    letter-spacing: 0.05em;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    width: 100%;
+    max-width: 860px;
+  }
+
+  @media (max-width: 640px) {
+    .layout { grid-template-columns: 1fr; }
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .panel-title {
+    font-size: 0.72rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 700;
+    margin-bottom: 2px;
+  }
+
+  label {
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-bottom: 4px;
+    display: block;
+    letter-spacing: 0.05em;
+  }
+
+  input[type="text"] {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-size: 1.1rem;
+    padding: 10px 14px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  input[type="text"]:focus { border-color: var(--accent); }
+
+  .row { display: flex; gap: 12px; flex-wrap: wrap; }
+
+  .color-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+    min-width: 80px;
+  }
+
+  input[type="color"] {
+    width: 100%;
+    height: 38px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    cursor: pointer;
+    padding: 2px 4px;
+  }
+
+  select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-size: 0.88rem;
+    padding: 9px 12px;
+    outline: none;
+    cursor: pointer;
+    width: 100%;
+    transition: border-color 0.2s;
+  }
+  select:focus { border-color: var(--accent); }
+
+  input[type="range"] {
+    width: 100%;
+    accent-color: var(--accent);
+  }
+
+  .range-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .range-val {
+    font-size: 0.8rem;
+    color: var(--accent);
+    min-width: 28px;
+    text-align: right;
+  }
+
+  /* Preview area */
+  .preview-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .canvas-wrap {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .checkered {
+    background-image:
+      linear-gradient(45deg, #2a2a3e 25%, transparent 25%),
+      linear-gradient(-45deg, #2a2a3e 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #2a2a3e 75%),
+      linear-gradient(-45deg, transparent 75%, #2a2a3e 75%);
+    background-size: 16px 16px;
+    background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
+    border-radius: 12px;
+    padding: 12px;
+    border: 1px solid var(--border);
+  }
+
+  canvas {
+    display: block;
+    border-radius: 6px;
+    image-rendering: pixelated;
+  }
+
+  .size-badges {
+    display: flex;
+    gap: 8px;
+  }
+
+  .badge {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 0.72rem;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .badge:hover, .badge.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(124,106,255,0.12);
+  }
+
+  .btn {
+    width: 100%;
+    padding: 13px;
+    border-radius: 12px;
+    border: none;
+    cursor: pointer;
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    transition: all 0.2s;
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #fff;
+  }
+  .btn-primary:hover {
+    opacity: 0.88;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 24px rgba(124,106,255,0.35);
+  }
+  .btn-secondary {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover {
+    border-color: var(--accent3);
+    color: var(--accent3);
+  }
+
+  .preview-thumbs {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .thumb-label {
+    font-size: 0.7rem;
+    color: var(--muted);
+    text-align: center;
+    margin-top: 4px;
+  }
+
+  .thumb-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .divider {
+    width: 100%;
+    height: 1px;
+    background: var(--border);
+    margin: 4px 0;
+  }
+
+  .tips {
+    font-size: 0.75rem;
+    color: var(--muted);
+    text-align: center;
+    line-height: 1.7;
+  }
+
+  /* Slack dark preview strip */
+  .slack-preview {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #1a1d21;
+    border-radius: 10px;
+    padding: 10px 14px;
+    border: 1px solid #2a2d31;
+    width: 100%;
+    font-size: 0.85rem;
+    color: #d1d2d3;
+  }
+
+  .slack-preview canvas {
+    flex-shrink: 0;
+  }
+
+  /* Stroke toggle */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .toggle {
+    position: relative;
+    width: 40px;
+    height: 22px;
+  }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .slider {
+    position: absolute;
+    inset: 0;
+    background: var(--border);
+    border-radius: 22px;
+    cursor: pointer;
+    transition: 0.2s;
+  }
+  .slider::before {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    left: 3px; top: 3px;
+    background: #fff;
+    border-radius: 50%;
+    transition: 0.2s;
+  }
+  .toggle input:checked + .slider { background: var(--accent); }
+  .toggle input:checked + .slider::before { transform: translateX(18px); }
+
+  .bg-options {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .bg-swatch {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: border-color 0.15s;
+  }
+  .bg-swatch.selected { border-color: var(--accent2); }
+
+</style>
+</head>
+<body>
+
+<h1>Slack Emoji Maker</h1>
+<p class="sub">文字を打って、オリジナル絵文字を作ろう ✨</p>
+
+<div class="layout">
+
+  <!-- Left: controls -->
+  <div class="panel">
+    <div class="panel-title">テキスト設定</div>
+
+    <div>
+      <label>テキスト（最大8文字推奨）</label>
+      <input type="text" id="textInput" value="草" maxlength="10" placeholder="好きな文字を入力">
+    </div>
+
+    <div>
+      <label>フォント</label>
+      <select id="fontSelect">
+        <option value="'M PLUS Rounded 1c', sans-serif">M PLUS Rounded（丸ゴシック）</option>
+        <option value="'Noto Sans JP', sans-serif">Noto Sans JP</option>
+        <option value="serif">明朝体</option>
+        <option value="'Impact', 'Arial Black', sans-serif">Impact（太め英字）</option>
+        <option value="monospace">等幅フォント</option>
+        <option value="'Comic Sans MS', cursive">Comic Sans</option>
+        <option value="'Zen Dots', cursive">Zen Dots</option>
+      </select>
+    </div>
+
+    <div class="row">
+      <div class="color-group">
+        <label>文字色</label>
+        <input type="color" id="textColor" value="#ffffff">
+      </div>
+      <div class="color-group">
+        <label>背景色</label>
+        <input type="color" id="bgColor" value="#4a6fff">
+      </div>
+      <div class="color-group">
+        <label>縁取り色</label>
+        <input type="color" id="strokeColor" value="#000000">
+      </div>
+    </div>
+
+    <div>
+      <label>プリセット背景</label>
+      <div class="bg-options" id="bgSwatches"></div>
+    </div>
+
+    <div class="divider"></div>
+    <div class="panel-title">スタイル設定</div>
+
+    <div class="toggle-row">
+      <label style="margin:0">縁取り（アウトライン）</label>
+      <label class="toggle">
+        <input type="checkbox" id="strokeToggle" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div>
+      <label>縁取りの太さ</label>
+      <div class="range-row">
+        <input type="range" id="strokeWidth" min="0" max="20" value="6">
+        <span class="range-val" id="strokeWidthVal">6</span>
+      </div>
+    </div>
+
+    <div>
+      <label>文字の太さ</label>
+      <select id="fontWeight">
+        <option value="400">普通</option>
+        <option value="700">太字</option>
+        <option value="900" selected>極太</option>
+      </select>
+    </div>
+
+    <div>
+      <label>縦方向の位置調整</label>
+      <div class="range-row">
+        <input type="range" id="offsetY" min="-40" max="40" value="0">
+        <span class="range-val" id="offsetYVal">0</span>
+      </div>
+    </div>
+
+    <div>
+      <label>角丸背景の丸み</label>
+      <div class="range-row">
+        <input type="range" id="radiusRange" min="0" max="64" value="16">
+        <span class="range-val" id="radiusVal">16</span>
+      </div>
+    </div>
+
+    <div class="toggle-row">
+      <label style="margin:0">背景を透明にする</label>
+      <label class="toggle">
+        <input type="checkbox" id="transparentBg">
+        <span class="slider"></span>
+      </label>
+    </div>
+
+  </div>
+
+  <!-- Right: preview + download -->
+  <div class="panel preview-panel">
+    <div class="panel-title">プレビュー</div>
+
+    <div class="size-badges">
+        <span class="badge" data-size="256">256px</span>
+      <span class="badge active" data-size="128">128px</span>
+      <span class="badge" data-size="64">64px</span>
+      <span class="badge" data-size="32">32px</span>
+    </div>
+
+    <div class="checkered">
+      <canvas id="mainCanvas" width="128" height="128"></canvas>
+    </div>
+
+    <!-- Slack message preview -->
+    <div class="slack-preview">
+      <canvas id="previewSmall" width="22" height="22"></canvas>
+      <span>これがSlackでの表示イメージです :emoji:</span>
+    </div>
+
+    <!-- Thumb previews -->
+    <div class="preview-thumbs">
+        
+      <div class="thumb-wrap">
+        <canvas id="thumb128" width="48" height="48"></canvas>
+        <div class="thumb-label">128px</div>
+      </div>
+      <div class="thumb-wrap">
+        <canvas id="thumb64" width="32" height="32"></canvas>
+        <div class="thumb-label">64px</div>
+      </div>
+      <div class="thumb-wrap">
+        <canvas id="thumb32" width="20" height="20"></canvas>
+        <div class="thumb-label">32px</div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <button class="btn btn-primary" id="downloadBtn">⬇ PNG でダウンロード（128×128）</button>
+    <button class="btn btn-secondary" id="copyBtn">📋 クリップボードにコピー</button>
+
+    <div class="tips">
+      Slackの絵文字は <strong>128×128px</strong> 推奨<br>
+      ファイルサイズは128KB以下にしてください
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ---- Config ----
+const BG_PRESETS = [
+  '#4a6fff','#ff4a6f','#ffca4a','#4affa0','#ff6ab0',
+  '#6affcd','#7c6aff','#ff9f4a','#1a1d21','#ffffff',
+  'transparent'
+];
+
+// ---- Elements ----
+const textInput    = document.getElementById('textInput');
+const fontSelect   = document.getElementById('fontSelect');
+const textColor    = document.getElementById('textColor');
+const bgColor      = document.getElementById('bgColor');
+const strokeColor  = document.getElementById('strokeColor');
+const strokeToggle = document.getElementById('strokeToggle');
+const strokeWidth  = document.getElementById('strokeWidth');
+const strokeWidthVal = document.getElementById('strokeWidthVal');
+const fontWeight   = document.getElementById('fontWeight');
+const offsetYEl    = document.getElementById('offsetY');
+const offsetYVal   = document.getElementById('offsetYVal');
+const radiusRange  = document.getElementById('radiusRange');
+const radiusVal    = document.getElementById('radiusVal');
+const transparentBg = document.getElementById('transparentBg');
+
+const mainCanvas   = document.getElementById('mainCanvas');
+const previewSmall = document.getElementById('previewSmall');
+const thumb128     = document.getElementById('thumb128');
+const thumb64      = document.getElementById('thumb64');
+const thumb32      = document.getElementById('thumb32');
+
+const downloadBtn  = document.getElementById('downloadBtn');
+const copyBtn      = document.getElementById('copyBtn');
+const bgSwatches   = document.getElementById('bgSwatches');
+
+let previewSize = 128;
+
+// ---- BG Swatches ----
+BG_PRESETS.forEach((color, i) => {
+  const s = document.createElement('div');
+  s.className = 'bg-swatch' + (i === 0 ? ' selected' : '');
+  s.style.background = color === 'transparent'
+    ? 'linear-gradient(45deg, #ccc 25%, #fff 25%, #fff 75%, #ccc 75%), linear-gradient(45deg, #ccc 25%, #fff 25%, #fff 75%, #ccc 75%)'
+    : color;
+  s.style.backgroundSize = color === 'transparent' ? '8px 8px' : '';
+  s.style.backgroundPosition = color === 'transparent' ? '0 0, 4px 4px' : '';
+  s.title = color === 'transparent' ? '透明' : color;
+  s.dataset.color = color;
+  s.addEventListener('click', () => {
+    document.querySelectorAll('.bg-swatch').forEach(x => x.classList.remove('selected'));
+    s.classList.add('selected');
+    if (color === 'transparent') {
+      transparentBg.checked = true;
+    } else {
+      transparentBg.checked = false;
+      bgColor.value = color;
+    }
+    render();
+  });
+  bgSwatches.appendChild(s);
+});
+
+// ---- Core render function ----
+function drawEmoji(canvas, size) {
+  const ctx = canvas.getContext('2d');
+  canvas.width = size;
+  canvas.height = size;
+  ctx.clearRect(0, 0, size, size);
+
+  const text     = textInput.value || '絵';
+  const font     = fontSelect.value;
+  const tColor   = textColor.value;
+  const bg       = bgColor.value;
+  const sColor   = strokeColor.value;
+  const sWidth   = parseInt(strokeWidth.value);
+  const hasStroke = strokeToggle.checked && sWidth > 0;
+  const weight   = fontWeight.value;
+  const offsetY  = parseInt(offsetYEl.value);
+  const radius   = parseInt(radiusRange.value) * (size / 128);
+  const isTransparent = transparentBg.checked;
+
+  // Background
+  if (!isTransparent) {
+    ctx.beginPath();
+    const r = Math.min(radius, size / 2);
+    ctx.moveTo(r, 0);
+    ctx.lineTo(size - r, 0);
+    ctx.quadraticCurveTo(size, 0, size, r);
+    ctx.lineTo(size, size - r);
+    ctx.quadraticCurveTo(size, size, size - r, size);
+    ctx.lineTo(r, size);
+    ctx.quadraticCurveTo(0, size, 0, size - r);
+    ctx.lineTo(0, r);
+    ctx.quadraticCurveTo(0, 0, r, 0);
+    ctx.closePath();
+    ctx.fillStyle = bg;
+    ctx.fill();
+  }
+
+  // --- Step 1: measure text at a large reference font size ---
+  const padding = size * 0.08;
+  const maxW = size - padding * 2;
+  const maxH = size - padding * 2;
+
+  // Use a tall reference size so measurements are accurate
+  const refSize = size * 2;
+  ctx.font = `${weight} ${refSize}px ${font}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+
+  const m = ctx.measureText(text);
+  const refW  = m.width;
+  const refAscent  = m.actualBoundingBoxAscent  || refSize * 0.78;
+  const refDescent = m.actualBoundingBoxDescent || refSize * 0.22;
+  const refH  = refAscent + refDescent;
+
+  // --- Step 2: compute scale to fill box (stretch X and Y independently) ---
+  const scaleX = maxW / refW;
+  const scaleY = maxH / refH;
+
+  // Clamp scaleX so it never squishes more than 50% of natural ratio
+  // (keeps text readable even for 1-char input)
+  const clampedScaleX = Math.max(scaleX, scaleY * 0.2);
+  const clampedScaleY = Math.max(scaleY, scaleX * 0.2);
+
+  // Final font size driven by Y scale (height fills the box)
+  const fontSize = refSize * clampedScaleY;
+
+  // --- Step 3: draw with transform ---
+  // We draw at refSize with scaleX correction so the glyph fills maxW & maxH
+  const drawScaleX = clampedScaleX / clampedScaleY; // horizontal stretch relative to font size
+
+  ctx.save();
+  ctx.translate(size / 2, size / 2 + offsetY * (size / 128));
+  ctx.scale(drawScaleX, 1);
+
+  ctx.font = `${weight} ${fontSize}px ${font}`;
+
+  // Vertical centering: center of ascent+descent block
+  const drawAscent  = (m.actualBoundingBoxAscent  || refSize * 0.78) * (fontSize / refSize);
+  const drawDescent = (m.actualBoundingBoxDescent || refSize * 0.22) * (fontSize / refSize);
+  const baselineY = (drawAscent - drawDescent) / 2;
+
+  // Stroke
+  if (hasStroke) {
+    ctx.lineWidth = (sWidth * (size / 128) * 2) / drawScaleX; // compensate for X scale
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = sColor;
+    ctx.strokeText(text, 0, baselineY);
+  }
+
+  // Fill
+  ctx.fillStyle = tColor;
+  ctx.fillText(text, 0, baselineY);
+
+  ctx.restore();
+}
+
+function render() {
+  drawEmoji(mainCanvas, previewSize);
+  // small slack preview
+  drawEmoji(previewSmall, 22);
+  // thumbs
+  drawEmoji(thumb128, 48);
+  drawEmoji(thumb64, 32);
+  drawEmoji(thumb32, 20);
+}
+
+// ---- Size badges ----
+document.querySelectorAll('.badge').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('.badge').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    previewSize = parseInt(b.dataset.size);
+    render();
+  });
+});
+
+// ---- Events ----
+const inputs = [textInput, fontSelect, textColor, bgColor, strokeColor,
+                strokeToggle, fontWeight, offsetYEl, radiusRange, transparentBg];
+inputs.forEach(el => el.addEventListener('input', render));
+inputs.forEach(el => el.addEventListener('change', render));
+
+strokeWidth.addEventListener('input', () => {
+  strokeWidthVal.textContent = strokeWidth.value;
+  render();
+});
+offsetYEl.addEventListener('input', () => {
+  offsetYVal.textContent = offsetYEl.value;
+  render();
+});
+radiusRange.addEventListener('input', () => {
+  radiusVal.textContent = radiusRange.value;
+  render();
+});
+
+// ---- Download ----
+downloadBtn.addEventListener('click', () => {
+  const offscreen = document.createElement('canvas');
+  drawEmoji(offscreen, 128);
+  const link = document.createElement('a');
+  const name = (textInput.value || 'emoji').replace(/[^a-zA-Z0-9\u3000-\u9fff\u30a0-\u30ff\u3041-\u3096]/g, '') || 'emoji';
+  link.download = `slack-emoji-${name}.png`;
+  link.href = offscreen.toDataURL('image/png');
+  link.click();
+});
+
+// ---- Copy ----
+copyBtn.addEventListener('click', async () => {
+  try {
+    const offscreen = document.createElement('canvas');
+    drawEmoji(offscreen, 128);
+    offscreen.toBlob(async blob => {
+      try {
+        await navigator.clipboard.write([
+          new ClipboardItem({ 'image/png': blob })
+        ]);
+        copyBtn.textContent = '✅ コピーしました!';
+        setTimeout(() => copyBtn.textContent = '📋 クリップボードにコピー', 2000);
+      } catch {
+        copyBtn.textContent = '❌ コピー失敗（ブラウザ非対応）';
+        setTimeout(() => copyBtn.textContent = '📋 クリップボードにコピー', 2500);
+      }
+    });
+  } catch (e) {
+    copyBtn.textContent = '❌ エラー';
+    setTimeout(() => copyBtn.textContent = '📋 クリップボードにコピー', 2500);
+  }
+});
+
+// ---- Load Google Fonts then render ----
+const link = document.createElement('link');
+link.rel = 'stylesheet';
+link.href = 'https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;900&family=Noto+Sans+JP:wght@400;700;900&family=Zen+Dots&display=swap';
+link.onload = () => { setTimeout(render, 200); };
+document.head.appendChild(link);
+render();
+</script>
+</body>
+</html>
